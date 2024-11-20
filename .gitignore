@@ -1,2 +1,3 @@
 .env
 opensearch_plugin
+.app/__pycache__

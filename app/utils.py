@@ -1,8 +1,8 @@
+import os
+import docker
 import toml
 import logging
 from fastapi import HTTPException
-import os
-import docker
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -86,3 +86,51 @@ def create_docker_container(new_container_name: str, config_file_path: str = "/e
     except docker.errors.ContainerError as e:
         raise HTTPException(status_code=500, detail=f"Docker error: {str(e)}")
     
+
+def get_active_and_all_containers():
+    """This function returns a dict of all and active containers with statuses"""
+
+    try:
+        docker_client = docker.from_env()
+
+        all_containers = {}
+        running = []
+        exited = []
+        paused = []
+        restarting = []
+
+        for container in docker_client.containers.list(all=True):
+            all_containers[container.name] = container.status
+            if container.status == "running":
+                running.append(container.name)
+            elif container.status == "exited":
+                exited.append(container.name)
+            elif container.status == "paused":
+                paused.append(container.name)
+            elif container.status == "restarting":
+                restarting.append(container.name)
+        
+        return {"containers": all_containers,
+                "running": running,
+                "exited": exited,
+                "paused": paused,
+                "restarting": restarting}
+
+    except docker.errors.ContainerError as e:
+        raise HTTPException(status_code=500, detail=f"Docker error: {str(e)}")
+        
+
+# def del_container(container_name: str):
+#     """This function deletes a container"""
+#     try:
+#         docker_client = docker.from_env()
+#         existing_container = docker_client.containers.get(container_name)
+#         if existing_container:
+#             existing_container.stop()
+#             existing_container.remove()
+#         else:
+#             return f"Container {existing_container} was not found. Check the name"
+#     except docker.errors.NotFound as e:
+#         raise HTTPException(status_code=500, detail=f"Docker error: {str(e)}") 
+    
+
