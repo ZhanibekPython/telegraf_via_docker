@@ -239,3 +239,8 @@ class ConfigurationFile(BaseModel):
 class SetAndStartConfigSchema(BaseModel):
     new_docker_container_name: str
     config_update: ConfigurationFile
+
+
+class ConfigEdit(BaseModel):
+    container_name: str
+    new_content: str

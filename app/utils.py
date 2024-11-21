@@ -1,13 +1,18 @@
 import os
 import docker
+import docker.errors
 import toml
 import logging
+import tarfile
 from fastapi import HTTPException
-from pydantic import Field
+from pydantic import Field, BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from io import BytesIO
+from .models.upper_models import ConfigurationFile
 
 
 logging.basicConfig(level=logging.INFO)
+docker_client = docker.from_env()
 
 DOTENV = os.path.join(os.path.dirname(__file__), ".env")
 
@@ -18,6 +23,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=DOTENV, env_file_encoding='utf-8')
 
 variables = Settings()
+
 
 def check_file_exists(filepath: str) -> bool:
     """This function checks if file exists"""
@@ -68,12 +74,11 @@ def parser(filepath: str, filepath2: str):
 # parser(r"D:\Work\app\models\parser.txt", r"D:\Work\app\models\aggregators.py")
 
 
+
 def create_docker_container(new_container_name: str, config_file_path: str = "/etc/telegraf/telegraf.conf", docker_image_name: str = "telegraf:1.31", volume_conf_file_path: str = "/etc/telegraf/telegraf.conf"):
     """This function creates a new docker container with given image_name and one volume presetting"""
 
     try:
-        docker_client = docker.from_env()
-
         container = docker_client.containers.run(
             image=docker_image_name,
             detach=True,
@@ -87,7 +92,7 @@ def create_docker_container(new_container_name: str, config_file_path: str = "/e
         raise HTTPException(status_code=500, detail=f"Docker error: {str(e)}")
     
 
-def get_active_and_all_containers():
+def get_containers():
     """This function returns a dict of all and active containers with statuses"""
 
     try:
@@ -118,19 +123,86 @@ def get_active_and_all_containers():
 
     except docker.errors.ContainerError as e:
         raise HTTPException(status_code=500, detail=f"Docker error: {str(e)}")
-        
 
-# def del_container(container_name: str):
-#     """This function deletes a container"""
-#     try:
-#         docker_client = docker.from_env()
-#         existing_container = docker_client.containers.get(container_name)
-#         if existing_container:
-#             existing_container.stop()
-#             existing_container.remove()
-#         else:
-#             return f"Container {existing_container} was not found. Check the name"
-#     except docker.errors.NotFound as e:
-#         raise HTTPException(status_code=500, detail=f"Docker error: {str(e)}") 
+
+def get_container_config(container_name: str, file_path: str = "/etc/telegraf/telegraf.conf"):
+    """This function retrieves the config file from a running container."""
+
+    try:
+        container = docker_client.containers.get(container_name)
+
+        tarstream, _ = container.get_archive(file_path)
+
+        file_content = b''.join(tarstream)
+        tar = tarfile.open(fileobj=BytesIO(file_content))
+
+        file_name = file_path.lstrip("/")
+        extracted_file = tar.extractfile(file_name)
+
+        if extracted_file is None:
+            raise HTTPException(status_code=404, detail="File not found in the container")
+
+        content = extracted_file.read().decode("utf-8")
+
+        deserialized_content = deserialize(content)
+
+        validated_content = ConfigurationFile(**deserialized_content)
+        
+        save_path = f"./{container_name}.conf"
+        with open(save_path, "w", encoding="utf-8") as file:
+            file.write(content)
+
+        return validated_content.model_dump(exclude_unset=True)
+
+    except docker.errors.NotFound:
+        raise HTTPException(status_code=404, detail="Container was not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Mistake: {str(e)}")
+    
+
+def config_edit(container_name: str, updated_content: str, file_path: str = "/etc/telegraf/telegraf.conf"):
+    """This function edits the config file inside a container."""
+    try:
+        container = docker_client.containers.get(container_name)
+
+        # creating temp file to store config in it
+        temp_path = f"./{container_name}_updated.conf"
+        with open(temp_path, "w", encoding="utf-8") as temp_file:
+            temp_file.write(updated_content)
+
+        # Creating tar-archieve with the config file
+        tar_stream = BytesIO()
+        with tarfile.open(fileobj=tar_stream, mode="w") as tar:
+            tar.add(temp_path, arcname=os.path.basename(file_path))
+        tar_stream.seek(0)
+
+        # loading archive into container
+        container.put_archive(
+            os.path.dirname(file_path),
+            tar_stream
+        )
+        # deelting temp file
+        os.remove(temp_path)
+
+        return {"update": "The configuration file was successfully updated"}
+
+    except docker.errors.NotFound:
+        raise HTTPException(status_code=404, detail="Container was not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Mistake: {str(e)}")
+
+
+def delete_container(container_name: str):
+    """This function deletes a container"""
+    try:
+        container = docker_client.containers.get(container_name)
+        if container:
+            container.stop()
+            container.remove()
+            return f"Container {container} was removed successfully"
+        else:
+            return f"Container {container} was not found. Check the name"
+    except docker.errors.NotFound as e:
+        raise HTTPException(status_code=500, detail=f"Docker error: {str(e)}") 
     
 

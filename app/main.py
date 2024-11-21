@@ -1,24 +1,30 @@
 from fastapi import FastAPI, HTTPException
-from .utils import deserialize, serialize, create_docker_container, variables, get_active_and_all_containers
-from .models.upper_models import ConfigurationFile, SetAndStartConfigSchema
+from .utils import deserialize, serialize, create_docker_container, variables, get_containers, config_edit, get_container_config, delete_container
+from .models.upper_models import ConfigurationFile, SetAndStartConfigSchema, ConfigEdit
 
 
 app = FastAPI()
 
 
-@app.get("/get_config")
-def get_config() -> ConfigurationFile:
-    try:
-        config_as_dict = deserialize(variables.CONFIGURATION_FILE_PATH)
-        return ConfigurationFile(**config_as_dict)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@app.get("/containers")
+def get_all_containers():
+    return get_containers()
+
+
+@app.get("/containers/{container_name}")
+def get_config(container_name) -> ConfigurationFile:
+    return get_container_config(container_name=container_name)
+
+
+@app.post("/edit_config")
+def edit_config(data: ConfigEdit):
+    return config_edit(data.container_name, data.new_content)
 
 
 @app.post("/start_config")
-def set_and_start_config(settings: SetAndStartConfigSchema):
+def start_new_config(settings: SetAndStartConfigSchema):
     try:
-        serialize(variables.CONFIGURATION_FILE_PATH, settings.config_update.model_dump())
+        serialize(variables.CONFIGURATION_FILE_PATH, settings.config_update.model_dump(exclude_unset=True))
         
         new_container_name = settings.new_docker_container_name
 
@@ -37,10 +43,7 @@ def set_and_start_config(settings: SetAndStartConfigSchema):
         raise HTTPException(status_code=500, detail=str(e))
     
 
-@app.get("/containers")
-def get_all_containers():
-    return get_active_and_all_containers()
-
-# @app.delete("/containers/{container_name}")
-# def del_container(container_name: str):
-#     return del_container(container_name=container_name)
+@app.delete("/del_container/{container_name}")
+def del_container(container_name: str) -> dict:
+    result = delete_container(container_name=container_name)
+    return {"result": result}
