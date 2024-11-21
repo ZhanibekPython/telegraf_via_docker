@@ -47,22 +47,12 @@ def deserialize(filepath: str) -> dict:
         raise HTTPException(status_code=500, detail="Server error. Configuration file damaged")
 
 
-def serialize(filepath: str, data: dict) -> str:
-    """This function converts dict to toml"""
-    check_file_exists(filepath)
-
-    if not isinstance(data, dict):
-        logging.error("The data must be dict-typed")
-        raise HTTPException(status_code=400, detail="Input data is not a dictionary")
-
+def serialize(validated_data: ConfigurationFile) -> str:
+    """Serialize a Pydantic model into a TOML string."""
     try:
-        with open(filepath, "w", encoding="utf-8") as file:
-            toml.dump(data, file)
-        logging.info(f"Success! File was updated: {filepath}")
-        return "Updated configuration file was saved successfully"
-    except (FileNotFoundError, toml.TomlDecodeError, OSError) as e:
-        logging.error(f"Error while dumping the file: {e}")
-        raise HTTPException(status_code=500, detail="Server error. Failed to update configuration file")
+        return toml.dumps(validated_data.model_dump(exclude_unset=True))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error serializing configuration: {str(e)}")
 
 def parser(filepath: str, filepath2: str):
     with open(filepath, 'r') as source, open(filepath2, 'a') as destination:
@@ -126,68 +116,51 @@ def get_containers():
 
 
 def get_container_config(container_name: str, file_path: str = "/etc/telegraf/telegraf.conf"):
-    """This function retrieves the config file from a running container."""
-
+    """Retrieve, deserialize, and validate the config file from a container."""
     try:
-        container = docker_client.containers.get(container_name)
-
-        tarstream, _ = container.get_archive(file_path)
-
-        file_content = b''.join(tarstream)
-        tar = tarfile.open(fileobj=BytesIO(file_content))
-
-        file_name = file_path.lstrip("/")
-        extracted_file = tar.extractfile(file_name)
-
-        if extracted_file is None:
-            raise HTTPException(status_code=404, detail="File not found in the container")
-
-        content = extracted_file.read().decode("utf-8")
-
-        deserialized_content = deserialize(content)
-
-        validated_content = ConfigurationFile(**deserialized_content)
-        
         save_path = f"./{container_name}.conf"
-        with open(save_path, "w", encoding="utf-8") as file:
-            file.write(content)
+
+        command = f"docker cp {container_name}:{file_path} {save_path}"
+        exit_code = os.system(command)
+
+        if exit_code != 0:
+            raise HTTPException(status_code=404, detail="File not found in the container or container does not exist.")
+
+        deserialized_content = deserialize(save_path)
+        validated_content = ConfigurationFile(**deserialized_content)
 
         return validated_content.model_dump(exclude_unset=True)
 
-    except docker.errors.NotFound:
-        raise HTTPException(status_code=404, detail="Container was not found")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Mistake: {str(e)}")
     
 
-def config_edit(container_name: str, updated_content: str, file_path: str = "/etc/telegraf/telegraf.conf"):
-    """This function edits the config file inside a container."""
+def config_edit(container_name: str, updated_content: dict, file_path: str = "/etc/telegraf/telegraf.conf"):
     try:
         container = docker_client.containers.get(container_name)
+        if container:
+            container.stop()
+            container.remove()
 
-        # creating temp file to store config in it
+        validated_content = ConfigurationFile(**updated_content)
+        serialized_content = serialize(validated_content)
+
         temp_path = f"./{container_name}_updated.conf"
         with open(temp_path, "w", encoding="utf-8") as temp_file:
-            temp_file.write(updated_content)
+            temp_file.write(serialized_content)
+        
+        abs_temp_path = os.path.abspath(temp_path)
 
-        # Creating tar-archieve with the config file
-        tar_stream = BytesIO()
-        with tarfile.open(fileobj=tar_stream, mode="w") as tar:
-            tar.add(temp_path, arcname=os.path.basename(file_path))
-        tar_stream.seek(0)
+        create_docker_container(new_container_name=container_name, config_file_path=abs_temp_path, volume_conf_file_path=file_path)
 
-        # loading archive into container
-        container.put_archive(
-            os.path.dirname(file_path),
-            tar_stream
-        )
-        # deelting temp file
         os.remove(temp_path)
+        
+        return {"update": "The configuration file was successfully updated and container was started"}
 
-        return {"update": "The configuration file was successfully updated"}
-
-    except docker.errors.NotFound:
-        raise HTTPException(status_code=404, detail="Container was not found")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Mistake: {str(e)}")
 

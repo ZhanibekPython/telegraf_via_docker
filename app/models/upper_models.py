@@ -243,4 +243,4 @@ class SetAndStartConfigSchema(BaseModel):
 
 class ConfigEdit(BaseModel):
     container_name: str
-    new_content: str
+    new_content: dict

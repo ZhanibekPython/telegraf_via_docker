@@ -1,3 +1,6 @@
 .env
 opensearch_plugin
-app.__pycache__
+docker-compose.yml
+requirements.txt
+telegraf_*
+mem*

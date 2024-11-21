@@ -12,12 +12,12 @@ def get_all_containers():
 
 
 @app.get("/containers/{container_name}")
-def get_config(container_name) -> ConfigurationFile:
+def get_config(container_name):
     return get_container_config(container_name=container_name)
 
 
 @app.post("/edit_config")
-def edit_config(data: ConfigEdit):
+def configurate_edit(data: ConfigEdit) -> dict:
     return config_edit(data.container_name, data.new_content)
 
 

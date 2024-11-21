@@ -63,7 +63,11 @@ class Clickhouse(CommonInputsParams):
     pass
 
 class Cpu(CommonInputsParams):
-    pass
+    percpu: bool | None = None
+    totalcpu: bool | None = None
+    collect_cpu_time: bool | None = None
+    report_active: bool | None = None
+    core_tags: bool | None = None
 
 class Disk(CommonInputsParams):
     pass
@@ -183,6 +187,44 @@ class Kubernetes(CommonInputsParams):
 
 class Logparser(CommonInputsParams):
     pass
+
+class MemFields(BaseModel):
+    active: int | None = None
+    available: int | None = None
+    available_percent: float | None = None
+    buffered: int | None = None
+    cached: int | None = None
+    commit_limit: int | None = None
+    committed_as: int | None = None
+    dirty: int | None = None
+    free: int | None = None
+    high_free: int | None = None
+    high_total: int | None = None
+    huge_pages_free: int | None = None
+    huge_page_size: int | None = None
+    huge_pages_total: int | None = None
+    inactive: int | None = None
+    laundry: int | None = None
+    low_free: int | None = None
+    low_total: int | None = None
+    mapped: int | None = None
+    page_tables: int | None = None
+    shared: int | None = None
+    slab: int | None = None
+    sreclaimable: int | None = None
+    sunreclaim: int | None = None
+    swap_cached: int | None = None
+    swap_free: int | None = None
+    swap_total: int | None = None
+    total: int | None = None
+    used: int | None = None
+    used_percent: float | None = None
+    vmalloc_chunk: int | None = None
+    vmalloc_total: int | None = None
+    vmalloc_used: int | None = None
+    wired: int | None = None
+    write_back: int | None = None
+    write_back_tmp: int | None = None
 
 class Mem(CommonInputsParams):
     pass
