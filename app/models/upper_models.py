@@ -236,9 +236,9 @@ class ConfigurationFile(BaseModel):
     outputs: OutputsPlugins | None = None
 
 
-class SetAndStartConfigSchema(BaseModel):
-    new_docker_container_name: str
-    config_update: ConfigurationFile
+class ConfigSchema(BaseModel):
+    container_name: str
+    config: ConfigurationFile
 
 
 class ConfigEdit(BaseModel):

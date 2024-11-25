@@ -56,7 +56,14 @@ class Execd(CommonOutputsParams):
     pass
 
 class File(CommonOutputsParams):
-    pass
+    files: list[str] | None = None
+    use_batch_format: bool | None = None
+    rotation_interval: str | None = None
+    rotation_max_size: str | None = None
+    rotation_max_archives: int | None = None
+    data_format: str | None = None
+    compression_algorithm: str | None = None
+    compression_level: str | None = None
 
 class CloudPursub(CommonOutputsParams):
     pass

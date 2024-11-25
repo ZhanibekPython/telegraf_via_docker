@@ -4,3 +4,4 @@ docker-compose.yml
 requirements.txt
 telegraf_*
 mem*
+cpu*
