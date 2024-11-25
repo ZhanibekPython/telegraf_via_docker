@@ -53,8 +53,11 @@ class DockerOperations:
         """This method removes a container by given name"""
         try:
             container = self.docker_client.containers.get(container_name)
-            container.stop()
-            container.remove()
+            if container:
+                container.stop()
+                container.remove()
+            if os.path.exists(self.get_config_path(container_name=container_name)):
+                os.remove(self.get_config_path(container_name=container_name))
 
             return {"message": f"Container '{container_name}' was removed successfully"}
         except NotFound:

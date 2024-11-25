@@ -28,6 +28,8 @@ def create_new_container(settings: ConfigSchema) -> dict:
                                               config=settings.config)
     
 
+# @app.
+
 @app.delete("/del_container/{container_name}")
 def del_container(container_name: str) -> dict:
     return docker_client.delete_container(container_name=container_name)
